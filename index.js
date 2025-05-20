@@ -24,9 +24,7 @@ app.use(express.static("public"));
 //   //Write your code here.
 // });
 
-
-
-app.get("/", async (req, res) => {
+async function check_visited() {
   const result = await db.query("SELECT country_code FROM visited_countries");
   // console.log(result);
   let countries = [];
@@ -35,12 +33,65 @@ app.get("/", async (req, res) => {
 
   });
   // console.log(result.rows);
+  return countries;
+}
+
+
+app.get("/", async (req, res) => {
+  // const result = await db.query("SELECT country_code FROM visited_countries");
+  // // console.log(result);
+  // let countries = [];
+  // result.rows.forEach((country) => {
+  //   countries.push(country.country_code);
+
+  // });
+  const countries = await check_visited();
+  // console.log(result.rows);
   res.render("index.ejs", {
     countries: countries, total: countries.length
   });
-  db.end();
+  // db.end();
 }
 );
+
+app.post("/add", async (req, res) => {
+  const input = req.body["country"];
+  try {
+    const result = await db.query(
+      "SELECT country_code FROM countries WHERE LOWER(country_name) LIKE  '%' || $1 || '%';",
+      [input.toLowerCase()]
+    );
+    // ^ this is to check the SQL lowercase query with the input that's changed to lowercase;
+    // const input = req.body["country"];
+    // const result = await db.query("SELECT country_code FROM countries WHERE country_name = $1", [input]);
+    // console.log(result.rows);
+    // if (result.rows.length !== 0)
+    const data = result.rows[0];
+    // console.log(data);
+    const countryCode = data.country_code;
+    try {
+      await db.query("INSERT INTO visited_countries (country_code) VALUES ($1)",
+        [countryCode]
+      );
+      res.redirect("/");
+
+    } catch (err) {
+      const countries = await check_visited();
+      res.render("index.ejs", {
+        countries: countries, total: countries.length, error: "You have already visited this country, try again"
+      })
+    }
+    // res.redirect("/");
+  } catch (err) {
+    // console.log(err);
+    const countries = await check_visited();
+    res.render("index.ejs", {
+      countries: countries, total: countries.length, error: "Country name doesn't exist, try again"
+    });
+  }
+
+  // db.end();
+});
 
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
